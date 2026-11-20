@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>이중 진자 카오스</title>
+<meta name="description" content="초기 각도를 0.0001°씩만 다르게 한 500개의 이중 진자가 한 면처럼 움직이다가 카오스로 파도처럼 흩어지는 3D 실험">
+<style>
+  :root { --bg: #03030c; --panel: rgba(12, 12, 32, 0.74); --line: rgba(170, 180, 255, 0.18);
+    --ink: #eef0ff; --muted: #a2a6cc; --pink: #ff5fb8; --cyan: #4ff3ff; --gold: #ffd166; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .glass { background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+  .panel { position: fixed; top: 14px; left: 14px; width: 300px; max-height: calc(100% - 28px); overflow-y: auto; padding: 16px; scrollbar-width: thin; transition: transform .25s; }
+  .panel.hide { transform: translateX(calc(-100% - 20px)); }
+  h1 { margin: 0 0 3px; font-size: 19px; letter-spacing: -.4px;
+    background: linear-gradient(90deg, var(--pink), var(--gold) 45%, var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { font-size: 11.5px; color: var(--muted); line-height: 1.55; margin-bottom: 10px; }
+  h2 { font-size: 11px; letter-spacing: 1.6px; color: var(--muted); margin: 14px 0 6px; }
+  .row { display: grid; grid-template-columns: 86px 1fr 58px; align-items: center; gap: 8px; font-size: 12.5px; margin: 5px 0; }
+  .row output { text-align: right; color: var(--gold); font-variant-numeric: tabular-nums; font-size: 12px; }
+  input[type=range] { width: 100%; accent-color: var(--pink); }
+  select, button { font: inherit; font-size: 12.5px; color: var(--ink); background: rgba(255,255,255,.07);
+    border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; cursor: pointer; }
+  select { width: 100%; } select option { background: #15122e; }
+  button:hover { background: rgba(255,255,255,.14); }
+  button.main { background: linear-gradient(90deg, #ff5fb8, #8a6bff); border: 0; font-weight: 700; padding: 10px 14px; }
+  button.main:hover { filter: brightness(1.1); }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 12.5px; margin-top: 4px; }
+  .checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  input[type=checkbox] { accent-color: var(--cyan); }
+  .hint { font-size: 11px; color: var(--muted); line-height: 1.55; margin-top: 10px; }
+  kbd { font-family: inherit; font-size: 10.5px; padding: 1px 5px; border-radius: 5px; border: 1px solid var(--line); background: rgba(255,255,255,.06); }
+
+  .hud { position: fixed; top: 14px; right: 14px; width: 330px; padding: 14px 16px; font-size: 12.5px; }
+  .clock { display: flex; align-items: baseline; justify-content: space-between; }
+  .clock span { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+  .clock small { color: var(--muted); }
+  .kv { display: flex; justify-content: space-between; margin: 4px 0; color: var(--muted); }
+  .kv b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .phase { margin: 8px 0 6px; padding: 7px 10px; border-radius: 10px; font-weight: 700; font-size: 13px; text-align: center; transition: background .4s, color .4s; }
+  .phase.p0 { background: rgba(79,243,255,.12); color: #8ff7ff; }
+  .phase.p1 { background: rgba(255,209,102,.16); color: #ffd98a; }
+  .phase.p2 { background: rgba(255,95,184,.18); color: #ff9bd2; }
+  canvas.plot { width: 100%; height: 150px; display: block; margin-top: 6px; }
+  .cap { font-size: 11px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
+  .cap b { color: var(--gold); }
+  .banner { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); padding: 12px 22px; font-size: 16px; font-weight: 700;
+    opacity: 0; transition: opacity .6s; pointer-events: none; text-align: center; white-space: nowrap; }
+  .banner.show { opacity: 1; }
+  .bottom { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px; }
+  .toggle { position: fixed; bottom: 14px; right: 14px; }
+  @media (max-width: 760px) {
+    .panel { width: calc(100% - 28px); max-height: 50%; top: auto; bottom: 64px; }
+    .hud { left: 14px; right: 14px; width: auto; padding: 10px 14px; }
+    .hud canvas.plot { height: 90px; } .hud .cap { display: none; }
+    .clock span { font-size: 24px; }
+    .bottom { left: 14px; transform: none; }
+    .banner { bottom: 120px; font-size: 14px; white-space: normal; width: calc(100% - 40px); }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="panel glass" id="panel">
+  <h1>이중 진자 카오스</h1>
+  <div class="sub">이웃한 진자끼리 처음 각도가 <b style="color:var(--gold)">0.0001°</b>씩만 다른 이중 진자를 한 줄로 세워 동시에 떨어뜨립니다. 같은 법칙, 거의 같은 시작 — 그런데 얼마 지나면 전혀 다른 길을 갑니다.</div>
+
+  <h2>실험 설정 (다시 시작하면 적용)</h2>
+  <div class="row"><b>진자 수</b><input type="range" id="count" min="50" max="1000" step="10" value="500"><output id="countV"></output></div>
+  <div class="row"><b>첫째 팔 각도</b><input type="range" id="th1" min="10" max="179" step="1" value="90"><output id="th1V"></output></div>
+  <div class="row"><b>둘째 팔 각도</b><input type="range" id="th2" min="-179" max="179" step="1" value="90"><output id="th2V"></output></div>
+  <div class="row" style="grid-template-columns:86px 1fr"><b>각도 차이</b>
+    <select id="delta">
+      <option value="1e-2">0.01° 씩</option>
+      <option value="1e-3">0.001° 씩</option>
+      <option value="1e-4" selected>0.0001° 씩</option>
+      <option value="1e-6">0.000001° 씩</option>
+      <option value="1e-9">0.000000001° 씩</option>
+    </select></div>
+  <div class="row" style="grid-template-columns:86px 1fr"><b>차이를 줄 팔</b>
+    <select id="which">
+      <option value="1">첫째 팔</option>
+      <option value="2">둘째 팔</option>
+      <option value="12" selected>두 팔 모두</option>
+    </select></div>
+
+  <h2>시간</h2>
+  <div class="row"><b>빠르기</b><input type="range" id="speed" min="0.1" max="3" step="0.05" value="1"><output id="speedV"></output></div>
+
+  <h2>보기</h2>
+  <div class="checks">
+    <label><input type="checkbox" id="cSheet" checked> 막(면)</label>
+    <label><input type="checkbox" id="cRods" checked> 팔</label>
+    <label><input type="checkbox" id="cBobs" checked> 추</label>
+    <label><input type="checkbox" id="cTrail" checked> 끝 추의 궤적</label>
+    <label><input type="checkbox" id="cRot"> 자동 회전</label>
+  </div>
+  <div class="row" style="grid-template-columns:86px 1fr;margin-top:8px"><b>색</b>
+    <select id="palette">
+      <option value="rainbow">무지개 (번호 순서)</option>
+      <option value="fire">불꽃</option>
+      <option value="ocean">바다</option>
+      <option value="candy">사탕</option>
+    </select></div>
+  <div class="btns">
+    <button data-cam="hero">비스듬히</button><button data-cam="front">정면</button><button data-cam="side">줄 끝에서</button><button data-cam="top">위에서</button>
+  </div>
+  <div class="hint"><kbd>Space</kbd> 멈춤·계속 · <kbd>R</kbd> 다시 시작 · <kbd>←</kbd><kbd>→</kbd> 빠르기 · <kbd>Tab</kbd> 패널 숨기기<br>
+  물리: 질량·길이가 같은 두 팔, 마찰 없음, 4차 룽게–쿠타(Δt = 1/2000초)를 배정밀도로 풉니다.</div>
+</div>
+
+<div class="hud glass" id="hud">
+  <div class="clock"><span id="clock">0.00</span><small>초 (시뮬레이션 시간)</small></div>
+  <div class="phase p0" id="phase">한 면처럼 움직이는 중</div>
+  <div class="kv">처음 전체 각도 폭 <b id="init">–</b></div>
+  <div class="kv">지금 둘째 팔 각도 폭 <b id="spread">–</b></div>
+  <div class="kv">이웃 진자끼리 최대 차이 <b id="nbr">–</b></div>
+  <canvas class="plot" id="plot" width="600" height="300"></canvas>
+  <div class="cap" id="cap">세로축이 <b>로그 눈금</b>입니다. 차이가 지수적으로 커지면 그래프가 <b>직선</b>으로 올라갑니다 — 그 기울기가 리아푸노프 지수입니다.</div>
+</div>
+
+<div class="bottom glass">
+  <button class="main" id="run">▶ 떨어뜨리기</button>
+  <button id="reset">↺ 처음으로</button>
+</div>
+<div class="banner glass" id="banner"></div>
+<button class="toggle" id="togglePanel">☰ 설정</button>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = id => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const DEG = Math.PI / 180;
+
+/* ───────────── 1. 설정 ───────────── */
+const S = { count: 500, th1: 90, th2: 90, delta: 1e-4, which: '12', speed: 1, palette: 'rainbow',
+  sheet: true, rods: true, bobs: true, trail: true, rot: false };
+for (const k of ['count', 'th1', 'th2', 'delta', 'speed']) if (Q.has(k)) S[k] = Number(Q.get(k));
+for (const k of ['which', 'palette']) if (Q.has(k)) S[k] = Q.get(k);
+
+// 물리 상수 (SI): 두 팔 길이 1m, 추 질량 1kg
+const G = 9.81, L1 = 1, L2 = 1, M1 = 1, M2 = 1;
+const H = 1 / 2000;                      // 적분 간격 (초)
+// 화면 배치
+const ARM = 7.5;                          // 팔 1m → 화면 7.5
+const ROW = 64;                           // 줄 전체 길이
+const PIVOT_Y = 9;
+
+/* ───────────── 2. 진자 상태 (배정밀도) ───────────── */
+const MAXN = 1000;
+const a1 = new Float64Array(MAXN), a2 = new Float64Array(MAXN), w1 = new Float64Array(MAXN), w2 = new Float64Array(MAXN);
+let N = 0, simT = 0, running = false, initSpread = 0;
+
+function reset() {
+  N = S.count;
+  const d = S.delta * DEG, c = (N - 1) / 2;
+  for (let i = 0; i < N; i++) {
+    const off = (i - c) * d;               // 가운데 진자가 기준, 양쪽으로 ±
+    a1[i] = S.th1 * DEG + (S.which.includes('1') ? off : 0);
+    a2[i] = S.th2 * DEG + (S.which.includes('2') ? off : 0);
+    w1[i] = 0; w2[i] = 0;
+  }
+  simT = 0; running = false; history.length = 0; chaosAt = -1; waveAt = -1;
+  initSpread = (N - 1) * S.delta;
+  $('init').textContent = fmtDeg(initSpread);
+  $('run').textContent = '▶ 떨어뜨리기';
+  $('banner').classList.remove('show');
+  layout(); rebuildGeometry(); writeScene(); record();
+}
+
+// 이중 진자의 운동 방정식 (라그랑주 역학)
+function deriv(t1, t2, o1, o2, out, k) {
+  const d = t1 - t2, sd = Math.sin(d), cd = Math.cos(d);
+  const den = 2 * M1 + M2 - M2 * Math.cos(2 * d);
+  out[k] = o1;
+  out[k + 1] = o2;
+  out[k + 2] = (-G * (2 * M1 + M2) * Math.sin(t1) - M2 * G * Math.sin(t1 - 2 * t2) - 2 * sd * M2 * (o2 * o2 * L2 + o1 * o1 * L1 * cd)) / (L1 * den);
+  out[k + 3] = (2 * sd * (o1 * o1 * L1 * (M1 + M2) + G * (M1 + M2) * Math.cos(t1) + o2 * o2 * L2 * M2 * cd)) / (L2 * den);
+}
+const K = new Float64Array(16);
+function rk4(i, h) {
+  const t1 = a1[i], t2 = a2[i], o1 = w1[i], o2 = w2[i];
+  deriv(t1, t2, o1, o2, K, 0);
+  deriv(t1 + K[0] * h / 2, t2 + K[1] * h / 2, o1 + K[2] * h / 2, o2 + K[3] * h / 2, K, 4);
+  deriv(t1 + K[4] * h / 2, t2 + K[5] * h / 2, o1 + K[6] * h / 2, o2 + K[7] * h / 2, K, 8);
+  deriv(t1 + K[8] * h, t2 + K[9] * h, o1 + K[10] * h, o2 + K[11] * h, K, 12);
+  a1[i] = t1 + h / 6 * (K[0] + 2 * K[4] + 2 * K[8] + K[12]);
+  a2[i] = t2 + h / 6 * (K[1] + 2 * K[5] + 2 * K[9] + K[13]);
+  w1[i] = o1 + h / 6 * (K[2] + 2 * K[6] + 2 * K[10] + K[14]);
+  w2[i] = o2 + h / 6 * (K[3] + 2 * K[7] + 2 * K[11] + K[15]);
+}
+function advance(seconds) {
+  const steps = Math.round(seconds / H);
+  for (let s = 0; s < steps; s++) for (let i = 0; i < N; i++) rk4(i, H);
+  simT += steps * H;
+}
+const energy = i => {
+  // 기준 진자의 에너지 (보존 확인용)
+  const v1 = L1 * w1[i], v2sq = (L1 * w1[i]) ** 2 + (L2 * w2[i]) ** 2 + 2 * L1 * L2 * w1[i] * w2[i] * Math.cos(a1[i] - a2[i]);
+  return 0.5 * M1 * v1 * v1 + 0.5 * M2 * v2sq - (M1 + M2) * G * L1 * Math.cos(a1[i]) - M2 * G * L2 * Math.cos(a2[i]);
+};
+
+/* ───────────── 3. 흩어진 정도 ───────────── */
+const wrap = x => { x = (x + Math.PI) % (2 * Math.PI); if (x < 0) x += 2 * Math.PI; return x - Math.PI; };
+const history = [];   // {t, spread, nbr} (도)
+let chaosAt = -1, waveAt = -1;
+function measure() {
+  const c = (N - 1) >> 1;
+  let lo = 0, hi = 0, nbr = 0;
+  for (let i = 0; i < N; i++) {
+    const d = wrap(a2[i] - a2[c]);
+    if (d < lo) lo = d; if (d > hi) hi = d;
+    if (i) { const e = Math.abs(wrap(a2[i] - a2[i - 1])); if (e > nbr) nbr = e; }
+  }
+  return { spread: (hi - lo) / DEG, nbr: nbr / DEG };
+}
+function record() {
+  const m = measure();
+  history.push({ t: simT, spread: Math.max(m.spread, 1e-12), nbr: Math.max(m.nbr, 1e-12) });
+  if (history.length > 4000) history.splice(0, history.length - 4000);
+  if (waveAt < 0 && m.spread > 1) { waveAt = simT; announce(`🌊 t = ${simT.toFixed(1)}초 — 처음 0.0001° 차이가 1°를 넘었습니다. 막이 휘기 시작합니다`); }
+  if (chaosAt < 0 && m.nbr > 10) { chaosAt = simT; announce(`💥 t = ${simT.toFixed(1)}초 — 이웃 진자끼리도 갈라져 막이 찢어집니다 (카오스)`); }
+  return m;
+}
+let bannerTimer;
+function announce(text) {
+  if (S.delta !== 1e-4) text = text.replace('처음 0.0001° 차이가', '처음 차이가');
+  const b = $('banner'); b.textContent = text; b.classList.add('show');
+  clearTimeout(bannerTimer); bannerTimer = setTimeout(() => b.classList.remove('show'), 4500);
+}
+function fmtDeg(x) {
+  if (x >= 1) return x.toFixed(1) + '°';
+  if (x >= 0.01) return x.toFixed(3) + '°';
+  const e = Math.floor(Math.log10(x)), m = x / 10 ** e;
+  return `${m.toFixed(1)}×10<sup>${e}</sup>°`;
+}
+
+/* ───────────── 4. 장면 ───────────── */
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: Q.has('shot') });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x05041a, 0.0065);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 900);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.dampingFactor = 0.07; controls.autoRotateSpeed = 0.5;
+controls.target.set(0, 0, 0); controls.maxDistance = 260; controls.minDistance = 6;
+
+{ // 하늘
+  const m = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: `varying vec3 vP; void main(){ float h = vP.y;
+      vec3 c = mix(vec3(0.05,0.02,0.11), vec3(0.012,0.010,0.040), smoothstep(0.,0.9,h));
+      c = mix(c, vec3(0.008,0.030,0.060), smoothstep(0.,-0.6,h));
+      c += exp(-pow((h-0.02)*7.,2.)) * vec3(0.13,0.03,0.12);
+      gl_FragColor = vec4(c,1.); }` });
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(500, 48, 32), m));
+  const n = 1500, p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const u = Math.random() * 2 - 1, a = Math.random() * 6.283, r = 420, s = Math.sqrt(1 - u * u); p.set([r * s * Math.cos(a), r * Math.abs(u) * 0.9 + 10, r * s * Math.sin(a)], i * 3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 1.4, color: 0xd8d4ff, fog: false, transparent: true, opacity: 0.8, depthWrite: false })));
+}
+scene.add(new THREE.HemisphereLight(0xc8bfff, 0x10283a, 0.8));
+const sun = new THREE.DirectionalLight(0xffffff, 1.3); sun.position.set(30, 60, 40); scene.add(sun);
+const rim = new THREE.DirectionalLight(0x6fe7ff, 0.8); rim.position.set(-40, -10, -60); scene.add(rim);
+{ // 바닥
+  const grid = new THREE.GridHelper(160, 40, 0x7a4cff, 0x241c5c);
+  grid.position.y = PIVOT_Y - 2 * ARM - 4; grid.material.transparent = true; grid.material.opacity = 0.35; scene.add(grid);
+}
+// 진자를 매다는 막대
+const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1, 24),
+  new THREE.MeshStandardMaterial({ color: 0xc9d2ff, metalness: 0.9, roughness: 0.25, emissive: 0x2a2f66, emissiveIntensity: 0.6 }));
+bar.rotation.z = Math.PI / 2; scene.add(bar);
+const posts = new THREE.Group(); scene.add(posts);
+
+// 진자 놓을 자리: x 축을 따라 한 줄. 각 진자는 y–z 평면에서 흔들린다.
+const px = new Float32Array(MAXN);
+function layout() {
+  const span = Math.min(ROW, 0.13 * N + 6);
+  for (let i = 0; i < N; i++) px[i] = N > 1 ? -span / 2 + span * i / (N - 1) : 0;
+  bar.scale.y = span + 4; bar.position.set(0, PIVOT_Y, 0);
+  posts.clear();
+  for (const s of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, PIVOT_Y - (PIVOT_Y - 2 * ARM - 4), 16),
+      new THREE.MeshStandardMaterial({ color: 0x8e95c8, metalness: 0.8, roughness: 0.35 }));
+    post.position.set(s * (span / 2 + 2), (PIVOT_Y + (PIVOT_Y - 2 * ARM - 4)) / 2, 0); posts.add(post);
+  }
+}
+
+// 색
+const PAL = {
+  rainbow: t => new THREE.Color().setHSL(0.83 * t, 1, 0.58),
+  fire: t => new THREE.Color().setHSL(0.0 + 0.15 * t, 1, 0.5 + 0.15 * t),
+  ocean: t => new THREE.Color().setHSL(0.47 + 0.22 * t, 0.95, 0.55),
+  candy: t => new THREE.Color().setHSL((0.9 + 0.45 * t) % 1, 0.95, 0.66),
+};
+const colors = [];
+function makeColors() { colors.length = 0; for (let i = 0; i < N; i++) colors.push(PAL[S.palette](N > 1 ? i / (N - 1) : 0)); }
+
+// 추: 인스턴스 구 (첫째 추, 둘째 추)
+const bobMat = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.1 });
+bobMat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = vColor * 0.45;'); };
+const bob1 = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), bobMat, MAXN);
+const bob2 = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 10), bobMat, MAXN);
+for (const b of [bob1, bob2]) { b.instanceMatrix.setUsage(THREE.DynamicDrawUsage); b.frustumCulled = false; scene.add(b); }
+// 팔: 선분 (정점 색)
+const rodGeo = new THREE.BufferGeometry();
+rodGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXN * 4 * 3), 3).setUsage(THREE.DynamicDrawUsage));
+rodGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(MAXN * 4 * 3), 3));
+const rods = new THREE.LineSegments(rodGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 }));
+rods.frustumCulled = false; scene.add(rods);
+// 막: 이웃한 진자의 팔끼리 이어 붙인 두 장의 띠 (축→첫째 추, 첫째 추→둘째 추)
+const sheetGeo = new THREE.BufferGeometry();
+sheetGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXN * 3 * 3), 3).setUsage(THREE.DynamicDrawUsage));
+sheetGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(MAXN * 3 * 3), 3));
+const sheetMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.42, roughness: 0.35, metalness: 0.15, depthWrite: false });
+sheetMat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = vColor * 0.35;'); };
+const sheet = new THREE.Mesh(sheetGeo, sheetMat); sheet.frustumCulled = false; scene.add(sheet);
+// 끝 추 궤적: 몇 개 진자만 (빛 꼬리)
+const TRAIL_LEN = 360, TRAIL_EVERY = 25;
+let trailIdx = [], trailBuf = null, trailHead = 0, trailFill = 0;
+const trailGeo = new THREE.BufferGeometry();
+const trails = new THREE.LineSegments(trailGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+trails.frustumCulled = false; scene.add(trails);
+
+function rebuildGeometry() {
+  makeColors();
+  for (let i = 0; i < N; i++) { bob1.setColorAt(i, colors[i]); bob2.setColorAt(i, colors[i]); }
+  bob1.instanceColor.needsUpdate = bob2.instanceColor.needsUpdate = true;
+  bob1.count = bob2.count = N;
+  const rc = rodGeo.attributes.color.array;
+  for (let i = 0; i < N; i++) for (let v = 0; v < 4; v++) rc.set([colors[i].r, colors[i].g, colors[i].b], (i * 4 + v) * 3);
+  rodGeo.attributes.color.needsUpdate = true; rodGeo.setDrawRange(0, N * 4);
+  // 막: 정점 = 진자마다 3개(축, 첫째 추, 둘째 추), 삼각형 인덱스는 이웃 사이 사각형 2개씩
+  const sc = sheetGeo.attributes.color.array;
+  for (let i = 0; i < N; i++) for (let v = 0; v < 3; v++) sc.set([colors[i].r, colors[i].g, colors[i].b], (i * 3 + v) * 3);
+  sheetGeo.attributes.color.needsUpdate = true;
+  const idx = [];
+  for (let i = 0; i < N - 1; i++) for (let s = 0; s < 2; s++) {
+    const a = i * 3 + s, b = a + 1, c = a + 3, d = b + 3;
+    idx.push(a, b, c, b, d, c);
+  }
+  sheetGeo.setIndex(idx);
+  // 궤적
+  trailIdx = []; for (let i = 0; i < N; i += Math.max(1, Math.round(N / 20))) trailIdx.push(i);
+  if (!trailIdx.includes(N - 1)) trailIdx.push(N - 1);
+  trailBuf = new Float32Array(trailIdx.length * TRAIL_LEN * 3); trailHead = 0; trailFill = 0;
+  trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(trailIdx.length * (TRAIL_LEN - 1) * 2 * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  trailGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(trailIdx.length * (TRAIL_LEN - 1) * 2 * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  trailGeo.setDrawRange(0, 0);
+}
+
+const _m = new THREE.Matrix4();
+function bobPos(i) {
+  const x = px[i];
+  const y1 = PIVOT_Y - ARM * Math.cos(a1[i]), z1 = ARM * Math.sin(a1[i]);
+  return [x, y1, z1, y1 - ARM * Math.cos(a2[i]), z1 + ARM * Math.sin(a2[i])];
+}
+function writeScene() {
+  const rp = rodGeo.attributes.position.array, sp = sheetGeo.attributes.position.array;
+  const r1 = Math.min(0.32, 0.09 + 22 / N * 0.06), r2 = Math.min(0.42, 0.12 + 22 / N * 0.08);
+  for (let i = 0; i < N; i++) {
+    const [x, y1, z1, y2, z2] = bobPos(i);
+    _m.makeScale(r1, r1, r1).setPosition(x, y1, z1); bob1.setMatrixAt(i, _m);
+    _m.makeScale(r2, r2, r2).setPosition(x, y2, z2); bob2.setMatrixAt(i, _m);
+    const o = i * 12;
+    rp[o] = x; rp[o + 1] = PIVOT_Y; rp[o + 2] = 0; rp[o + 3] = x; rp[o + 4] = y1; rp[o + 5] = z1;
+    rp[o + 6] = x; rp[o + 7] = y1; rp[o + 8] = z1; rp[o + 9] = x; rp[o + 10] = y2; rp[o + 11] = z2;
+    const q = i * 9;
+    sp[q] = x; sp[q + 1] = PIVOT_Y; sp[q + 2] = 0; sp[q + 3] = x; sp[q + 4] = y1; sp[q + 5] = z1; sp[q + 6] = x; sp[q + 7] = y2; sp[q + 8] = z2;
+  }
+  bob1.instanceMatrix.needsUpdate = bob2.instanceMatrix.needsUpdate = true;
+  rodGeo.attributes.position.needsUpdate = true;
+  sheetGeo.attributes.position.needsUpdate = true; sheetGeo.computeVertexNormals();
+  sheet.visible = S.sheet; rods.visible = S.rods; bob1.visible = bob2.visible = S.bobs; trails.visible = S.trail;
+}
+function pushTrail() {
+  const T = trailIdx.length;
+  for (let t = 0; t < T; t++) {
+    const [x, , , y2, z2] = bobPos(trailIdx[t]);
+    trailBuf.set([x, y2, z2], (t * TRAIL_LEN + trailHead) * 3);
+  }
+  trailHead = (trailHead + 1) % TRAIL_LEN; trailFill = Math.min(TRAIL_LEN, trailFill + 1);
+  const P = trailGeo.attributes.position.array, C = trailGeo.attributes.color.array;
+  let v = 0;
+  for (let t = 0; t < T; t++) {
+    const col = colors[trailIdx[t]];
+    for (let k = 1; k < trailFill; k++) {
+      const a = (trailHead - trailFill + k - 1 + TRAIL_LEN) % TRAIL_LEN;
+      for (let e = 0; e < 2; e++) {           // 선분의 두 끝: 오래된 쪽일수록 어둡게
+        const s = (a + e) % TRAIL_LEN, w = ((k - 1 + e) / trailFill) ** 2, src = (t * TRAIL_LEN + s) * 3;
+        P[v * 3] = trailBuf[src]; P[v * 3 + 1] = trailBuf[src + 1]; P[v * 3 + 2] = trailBuf[src + 2];
+        C[v * 3] = col.r * w; C[v * 3 + 1] = col.g * w; C[v * 3 + 2] = col.b * w; v++;
+      }
+    }
+  }
+  trailGeo.setDrawRange(0, v); trailGeo.attributes.position.needsUpdate = true; trailGeo.attributes.color.needsUpdate = true;
+}
+
+// 블룸
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.75, 0.5, 0.6);
+composer.addPass(bloom); composer.addPass(new OutputPass());
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false); composer.setSize(w, h); bloom.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+const CAMS = {
+  hero: [[46, 18, 52], [0, -1, 0]],
+  front: [[0, 2, 78], [0, -1, 0]],
+  side: [[-62, 4, 26], [2, -2, 0]],
+  top: [[0, 72, 8], [0, -2, 0]],
+  portrait: [[-92, 2, 40], [4, 5, 0]],   // 휴대폰 세로: 줄 끝에서, 위쪽 계기판에 가리지 않게 조금 아래로
+};
+let camTween = null;
+function setCam(name, instant) {
+  // 세로 화면: 줄을 옆에서 보는 시점은 멀리 물러나야 다 들어온다 (줄 끝에서 보는 시점은 그대로)
+  const [p, t] = CAMS[name], k = camera.aspect < 1 && !['side', 'portrait'].includes(name) ? 1.2 / camera.aspect : 1;
+  const to = new THREE.Vector3(...p).multiplyScalar(Math.max(1, k)), tt = new THREE.Vector3(...t);
+  if (instant) { camera.position.copy(to); controls.target.copy(tt); return; }
+  camTween = { p0: camera.position.clone(), t0: controls.target.clone(), p1: to, t1: tt, u: 0 };
+}
+
+/* ───────────── 5. 그래프 (로그 눈금) ───────────── */
+const plot = $('plot'), pg = plot.getContext('2d');
+function drawPlot() {
+  const W = plot.width, Hh = plot.height, L = 58, R = 10, T = 12, B = 30;
+  pg.clearRect(0, 0, W, Hh);
+  const lo = Math.floor(Math.log10(S.delta)) - 1, hi = 3;
+  const tMax = Math.max(10, Math.ceil((history.at(-1)?.t || 0) / 5) * 5);
+  const X = t => L + (W - L - R) * t / tMax, Y = v => T + (Hh - T - B) * (1 - (Math.log10(Math.max(v, 10 ** lo)) - lo) / (hi - lo));
+  pg.font = '19px sans-serif'; pg.fillStyle = 'rgba(162,166,204,.85)'; pg.strokeStyle = 'rgba(255,255,255,.08)'; pg.lineWidth = 1;
+  for (let e = lo; e <= hi; e++) {
+    if ((hi - lo) > 8 && e % 2) continue;
+    const y = Y(10 ** e); pg.beginPath(); pg.moveTo(L, y); pg.lineTo(W - R, y); pg.stroke();
+    pg.fillText(e === 0 ? '1°' : e === 1 ? '10°' : e === 2 ? '100°' : `1e${e}°`, 4, y + 6);
+  }
+  for (let t = 0; t <= tMax; t += tMax > 40 ? 10 : 5) { const x = X(t); pg.fillText(t + 's', x - 8, Hh - 6); }
+  // 180° 선 (완전히 흩어진 수준)
+  pg.strokeStyle = 'rgba(255,95,184,.35)'; pg.setLineDash([6, 6]); pg.beginPath(); pg.moveTo(L, Y(180)); pg.lineTo(W - R, Y(180)); pg.stroke(); pg.setLineDash([]);
+  const line = (key, color, width) => {
+    pg.strokeStyle = color; pg.lineWidth = width; pg.beginPath();
+    history.forEach((h, i) => { const x = X(h.t), y = Y(h[key]); i ? pg.lineTo(x, y) : pg.moveTo(x, y); }); pg.stroke();
+  };
+  line('nbr', '#4ff3ff', 2.5);
+  line('spread', '#ff5fb8', 3.5);
+  pg.fillStyle = '#ff9bd2'; pg.fillText('전체 폭', W - 96, T + 18);
+  pg.fillStyle = '#8ff7ff'; pg.fillText('이웃 차이', W - 96, T + 42);
+}
+// 리아푸노프 지수 추정: 이웃 차이가 1e-1° 아래인 구간의 log 기울기
+function lyapunov() {
+  const pts = history.filter(h => h.nbr > S.delta * 3 && h.nbr < 0.1 && h.t > 0.5);
+  if (pts.length < 20) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of pts) { const y = Math.log(p.nbr); sx += p.t; sy += y; sxx += p.t * p.t; sxy += p.t * y; }
+  const n = pts.length; return (n * sxy - sx * sy) / (n * sxx - sx * sx);
+}
+
+/* ───────────── 6. 조작 ───────────── */
+const fmtS = { count: v => v, th1: v => v + '°', th2: v => v + '°', speed: v => '×' + Number(v).toFixed(2) };
+for (const [k, f] of Object.entries(fmtS)) {
+  $(k).value = S[k]; $(k + 'V').textContent = f(S[k]);
+  $(k).addEventListener('input', () => { S[k] = Number($(k).value); $(k + 'V').textContent = f(S[k]); if (k !== 'speed' && simT === 0) reset(); });
+}
+$('delta').value = String(S.delta) === '0.0001' ? '1e-4' : String(S.delta).replace('0.01', '1e-2');
+$('delta').addEventListener('change', () => { S.delta = Number($('delta').value); reset(); });
+$('which').value = S.which; $('which').addEventListener('change', () => { S.which = $('which').value; reset(); });
+$('palette').value = S.palette; $('palette').addEventListener('change', () => { S.palette = $('palette').value; rebuildGeometry(); });
+for (const [id, key] of [['cSheet', 'sheet'], ['cRods', 'rods'], ['cBobs', 'bobs'], ['cTrail', 'trail'], ['cRot', 'rot']]) {
+  $(id).checked = S[key]; $(id).addEventListener('change', () => { S[key] = $(id).checked; if (key === 'trail') { trailFill = 0; } });
+}
+document.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => setCam(b.dataset.cam)));
+$('run').onclick = () => { running = !running; $('run').textContent = running ? '⏸ 멈춤' : '▶ 계속'; };
+$('reset').onclick = reset;
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT') return;
+  if (e.key === ' ') { e.preventDefault(); $('run').click(); }
+  if (e.key === 'r' || e.key === 'R') reset();
+  if (e.key === 'ArrowRight') { S.speed = Math.min(3, S.speed + 0.25); $('speed').value = S.speed; $('speedV').textContent = fmtS.speed(S.speed); }
+  if (e.key === 'ArrowLeft') { S.speed = Math.max(0.1, S.speed - 0.25); $('speed').value = S.speed; $('speedV').textContent = fmtS.speed(S.speed); }
+  if (e.key === 'Tab') { e.preventDefault(); $('panel').classList.toggle('hide'); }
+});
+$('togglePanel').onclick = () => $('panel').classList.toggle('hide');
+if (innerWidth < 760) $('panel').classList.add('hide');
+
+/* ───────────── 7. 시작 ───────────── */
+reset();
+setCam(camera.aspect < 0.8 ? 'portrait' : 'hero', true);
+// ?t=초 : 그 시각까지 미리 계산해 둔 모습 (확인용), ?run : 바로 떨어뜨림
+if (Q.has('t')) {
+  const T = Number(Q.get('t'));
+  while (simT < T - 1e-9) { advance(Math.min(1 / 30, T - simT)); record(); }
+  running = !Q.has('freeze');
+} else if (Q.has('run')) running = true;
+if (Q.has('cam')) setCam(Q.get('cam'), true);
+
+let last = performance.now(), hudT = 0, trailT = 0;
+const E0 = energy((N - 1) >> 1);
+function hud() {
+  const m = history.at(-1) || { spread: 0, nbr: 0 };
+  $('clock').textContent = simT.toFixed(2);
+  $('spread').innerHTML = fmtDeg(m.spread);
+  $('nbr').innerHTML = fmtDeg(m.nbr);
+  const ph = $('phase');
+  if (m.spread < 1) { ph.className = 'phase p0'; ph.textContent = running || simT ? '한 면처럼 움직이는 중 — 차이는 눈에 안 보입니다' : '준비 — ▶ 떨어뜨리기를 누르세요'; }
+  else if (m.nbr < 10) { ph.className = 'phase p1'; ph.textContent = '파도처럼 휘는 중 — 이웃끼리는 아직 이어져 있습니다'; }
+  else { ph.className = 'phase p2'; ph.textContent = '카오스 — 막이 찢어지고 진자마다 다른 길'; }
+  const lam = lyapunov();
+  const dE = Math.abs(energy((N - 1) >> 1) - E0) / Math.abs(E0 || 1);
+  $('cap').innerHTML = `세로축이 <b>로그 눈금</b>이라 지수적으로 커지는 차이가 <b>직선</b>으로 올라갑니다.` +
+    (lam ? ` 기울기로 잰 리아푸노프 지수 ≈ <b>${lam.toFixed(2)}/초</b> (차이가 약 <b>${(Math.LN2 / lam).toFixed(2)}초</b>마다 두 배).` : '') +
+    ` 에너지 오차 ${dE < 1e-9 ? '&lt;10⁻⁹' : dE.toExponential(0)}.`;
+  drawPlot();
+}
+function loop() {
+  const now = performance.now(), dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+  if (running) { advance(dt * S.speed); record(); }
+  writeScene();
+  trailT += dt; if (S.trail && running && trailT > 1 / 60) { trailT = 0; pushTrail(); }
+  if (camTween) {
+    camTween.u = Math.min(1, camTween.u + dt * 1.2); const e = 1 - (1 - camTween.u) ** 3;
+    camera.position.lerpVectors(camTween.p0, camTween.p1, e); controls.target.lerpVectors(camTween.t0, camTween.t1, e);
+    if (camTween.u >= 1) camTween = null;
+  }
+  controls.autoRotate = S.rot; controls.update();
+  composer.render();
+  if (now - hudT > 120) { hudT = now; hud(); }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+window.__dp = { S, get t() { return simT; }, measure, history, lyapunov, a1, a2 };
+</script>
+</body>
+</html>
